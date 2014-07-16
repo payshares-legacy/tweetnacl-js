@@ -703,13 +703,12 @@ function scalarbase(p, s) {
   scalarmult(p, q, s);
 }
 
-function crypto_sign_keypair(pk, sk) {
+function crypto_sign_keypair_from_seed(seed, pk, sk) {
   var d = new Uint8Array(64);
   var p = [gf(), gf(), gf(), gf()];
   var i;
 
-  randombytes(sk, 32);
-  crypto_hash(d, sk, 32);
+  crypto_hash(d, seed, 32);
   d[0] &= 248;
   d[31] &= 127;
   d[31] |= 64;
@@ -717,8 +716,16 @@ function crypto_sign_keypair(pk, sk) {
   scalarbase(p, d);
   pack(pk, p);
 
+  for (i = 0; i < 32; i++) sk[i] = seed[i];
   for (i = 0; i < 32; i++) sk[i+32] = pk[i];
   return 0;
+}
+
+function crypto_sign_keypair(pk, sk) {
+  var seed = new Uint8Array(crypto_sign_SEEDBYTES)
+  randombytes(seed, crypto_sign_SEEDBYTES)
+  
+  return crypto_sign_keypair_from_seed(seed, pk, sk);
 }
 
 var L = new Float64Array([0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10]);
@@ -874,6 +881,7 @@ var crypto_secretbox_KEYBYTES = 32,
     crypto_box_ZEROBYTES = crypto_secretbox_ZEROBYTES,
     crypto_box_BOXZEROBYTES = crypto_secretbox_BOXZEROBYTES,
     crypto_sign_BYTES = 64,
+    crypto_sign_SEEDBYTES = 32,
     crypto_sign_PUBLICKEYBYTES = 32,
     crypto_sign_SECRETKEYBYTES = 64,
     crypto_hash_BYTES = 64;
@@ -915,6 +923,7 @@ nacl.lowlevel = {
   crypto_box_ZEROBYTES : crypto_box_ZEROBYTES,
   crypto_box_BOXZEROBYTES : crypto_box_BOXZEROBYTES,
   crypto_sign_BYTES : crypto_sign_BYTES,
+  crypto_sign_SEEDBYTES : crypto_sign_SEEDBYTES,
   crypto_sign_PUBLICKEYBYTES : crypto_sign_PUBLICKEYBYTES,
   crypto_sign_SECRETKEYBYTES : crypto_sign_SECRETKEYBYTES,
   crypto_hash_BYTES : crypto_hash_BYTES
@@ -1111,6 +1120,16 @@ nacl.sign.keyPair.fromSecretKey = function(secretKey) {
   var i;
   for (i = 0; i < 32; i++) pk[i] = secretKey[32+i];
   return {publicKey: pk, secretKey: secretKey};
+};
+
+nacl.sign.keyPair.fromSeed = function(seed) {
+  checkArrayTypes(seed);
+  if (seed.length !== crypto_sign_SEEDBYTES)
+    throw new Error('bad seed size');
+  var pk = new Uint8Array(crypto_sign_PUBLICKEYBYTES);
+  var sk = new Uint8Array(crypto_sign_SECRETKEYBYTES);
+  crypto_sign_keypair_from_seed(seed, pk, sk);
+  return {publicKey: pk, secretKey: sk};
 };
 
 nacl.sign.publicKeyLength = crypto_sign_PUBLICKEYBYTES;
